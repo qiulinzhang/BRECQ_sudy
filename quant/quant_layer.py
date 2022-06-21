@@ -118,6 +118,9 @@ class UniformAffineQuantizer(nn.Module):
                 x_min = x.min()
                 best_score = 1e+10
                 for i in range(80):
+                    # 初始化时迭代80个epoch，每个epoch会把零点 zero_point 往大（右）移动
+                    # 相当于把 x_max 逐渐缩小，从而找到一个值，其造成的量化误差最小
+                    # 按理来说，范围变窄了，delta步长也要变小（细），这里却没有发生变化？？？
                     new_max = x_max * (1.0 - (i * 0.01))
                     new_min = x_min * (1.0 - (i * 0.01))
                     x_q = self.quantize(x, new_max, new_min)
