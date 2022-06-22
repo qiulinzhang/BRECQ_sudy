@@ -94,6 +94,7 @@ class UniformAffineQuantizer(nn.Module):
                 delta = delta.view(-1, 1)
                 zero_point = zero_point.view(-1, 1)
         else:
+            # 直接通过最大值最小值来取 delta 和 zero_point 初始化
             if 'max' in self.scale_method:
                 x_min = min(x.min().item(), 0)
                 x_max = max(x.max().item(), 0)
@@ -112,17 +113,21 @@ class UniformAffineQuantizer(nn.Module):
 
                 zero_point = round(-x_min / delta)
                 delta = torch.tensor(delta).type_as(x)
-
+            # 通过mse最小来找 delta 和 zero_point 的初始化值
             elif self.scale_method == 'mse':
                 x_max = x.max()
                 x_min = x.min()
                 best_score = 1e+10
                 for i in range(80):
                     # 初始化时迭代80个epoch，每个epoch会把零点 zero_point 往大（右）移动
-                    # 相当于把 x_max 逐渐缩小，从而找到一个值，其造成的量化误差最小
-                    # 按理来说，范围变窄了，delta步长也要变小（细），这里却没有发生变化？？？
-                    new_max = x_max * (1.0 - (i * 0.01))
-                    new_min = x_min * (1.0 - (i * 0.01))
+                    # 且每个epoch new_max-new_min 的值范围都会变窄
+                    # 相当于逐渐收缩原始的值域范围，找到一个 delta 和 zero_point 使得量化误差最小
+                    # 当x_min<0 时，其 new_min 是逐渐变大的
+                    # 当x_min>0 时，其 new_min 是逐渐变小的，这就可能会存在一定的位宽浪费
+                    # 当x_min==0时，没有影响
+                    new_max = x_max * (1.0 - (i * 0.01)) # 由于一个输出通道里的权重一般都 >=0，因此采取这样的方式大概率没问题
+                    new_min = x_min * (1.0 - (i * 0.01)) # 由于一个输出通道里的权重一般都 <=0，因此采取这样的方式大概率没问题
+                    # 感觉最好是加个判断，根据 x_max 和 x_min 是大于0还是小于0来采用加号还是减号 
                     x_q = self.quantize(x, new_max, new_min)
                     # L_p norm minimization as described in LAPQ
                     # https://arxiv.org/abs/1911.07190
@@ -172,7 +177,7 @@ class QuantModule(nn.Module):
             self.fwd_kwargs = dict()
             self.fwd_func = F.linear
         self.weight = org_module.weight
-        self.org_weight = org_module.weight.data.clone()
+        self.org_weight = org_module.weight.data.clone() # 去除了梯度图，不会被更新
         if org_module.bias is not None:
             self.bias = org_module.bias
             self.org_bias = org_module.bias.data.clone()
@@ -198,7 +203,7 @@ class QuantModule(nn.Module):
             weight = self.weight_quantizer(self.weight)
             bias = self.bias
         else:
-            weight = self.org_weight
+            weight = self.org_weight # 如果没有采用量化，那么weight和bias不会发生变化，即便进行训练，因为采取了 data.clone() 没有保留下梯度图
             bias = self.org_bias
         out = self.fwd_func(input, weight, bias, **self.fwd_kwargs)
         # disable act quantization is designed for convolution before elemental-wise operation,
