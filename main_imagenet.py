@@ -224,6 +224,7 @@ if __name__ == '__main__':
                 recon_model(module)
 
     # Start calibration
+    # BRECQ 是先优化好权重量化，再去优化激活量化；即权重量化在优化时不会考虑激活量化的影响，然后 激活量化在优化时会考虑权重量化，但不会对权重量化进行更新，只会更新激活量化
     recon_model(qnn)
     qnn.set_quant_state(weight_quant=True, act_quant=False)
     print('Weight quantization accuracy: {}'.format(validate_model(test_loader, qnn)))

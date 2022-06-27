@@ -64,6 +64,7 @@ def layer_reconstruction(model: QuantModel, layer: QuantModule, cali_data: torch
                              decay_start=0, warmup=warmup, p=p)
 
     # Save data before optimizing the rounding
+    # 获取当前层的 1. 输入（之前的层都进行了量化）；2.浮点输出（都不进行量化，作为自蒸馏的ground truth）
     cached_inps, cached_outs = save_inp_oup_data(model, layer, cali_data, asym, act_quant, batch_size)
     if opt_mode != 'mse':
         cached_grads = save_grad_data(model, layer, cali_data, act_quant, batch_size=batch_size)

@@ -116,13 +116,13 @@ class GetLayerInpOut:
         handle = self.layer.register_forward_hook(self.data_saver)
         with torch.no_grad():
             try:
-                _ = self.model(model_input.to(self.device))
+                _ = self.model(model_input.to(self.device)) # 这里返回的是 都没有经过量化的当前层/block的输入输出
             except StopForwardException:
                 pass
 
             if self.asym:
                 # Recalculate input with network quantized
-                self.data_saver.store_output = False
+                self.data_saver.store_output = False # 返回的输入量化，但是输出不量化
                 self.model.set_quant_state(weight_quant=True, act_quant=self.act_quant)
                 try:
                     _ = self.model(model_input.to(self.device))

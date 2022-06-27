@@ -120,13 +120,18 @@ class UniformAffineQuantizer(nn.Module):
                 best_score = 1e+10
                 for i in range(80):
                     # 初始化时迭代80个epoch，每个epoch会把零点 zero_point 往大（右）移动
+                    # 相当于把 x_max 逐渐缩小，从而找到一个值，其造成的量化误差最小
+                    # 按理来说，范围变窄了，delta步长也要变小（细），这里却没有发生变化？？？
+                    new_max = x_max * (1.0 - (i * 0.01))
+                    new_min = x_min * (1.0 - (i * 0.01))
+                    # 初始化时迭代80个epoch，每个epoch会把零点 zero_point 往大（右）移动
                     # 且每个epoch new_max-new_min 的值范围都会变窄
                     # 相当于逐渐收缩原始的值域范围，找到一个 delta 和 zero_point 使得量化误差最小
                     # 当x_min<0 时，其 new_min 是逐渐变大的
                     # 当x_min>0 时，其 new_min 是逐渐变小的，这就可能会存在一定的位宽浪费
                     # 当x_min==0时，没有影响
-                    new_max = x_max * (1.0 - (i * 0.01)) # 由于一个输出通道里的权重一般都 >=0，因此采取这样的方式大概率没问题
-                    new_min = x_min * (1.0 - (i * 0.01)) # 由于一个输出通道里的权重一般都 <=0，因此采取这样的方式大概率没问题
+                    new_max = x_max * (1.0 - (i * 0.01)) # 由于一个输出通道里的权重的最大值一般都 >=0，因此采取这样的方式大概率没问题
+                    new_min = x_min * (1.0 - (i * 0.01)) # 由于一个输出通道里的权重的最小值一般都 <=0，因此采取这样的方式大概率没问题
                     # 感觉最好是加个判断，根据 x_max 和 x_min 是大于0还是小于0来采用加号还是减号 
                     x_q = self.quantize(x, new_max, new_min)
                     # L_p norm minimization as described in LAPQ
